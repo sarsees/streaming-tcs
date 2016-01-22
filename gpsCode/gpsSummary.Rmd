@@ -1,0 +1,137 @@
+---
+title: "GPS_Data"
+author: "Sarah M. Reehl"
+date: "January 21, 2016"
+output: html_document
+---
+
+#The GPS Data
+##Lat Long Information
+###Summary
+
+```{r, echo = FALSE}
+gpsData <- read.csv("/Volumes/AIM_Bramer/VASTChal2014MC2-20140430/gps.csv", header = TRUE, stringsAsFactors = FALSE)
+```
+
+This data set was developed for the [VAST Challenge 2014 Mini-Challenge 2](http://vacommunity.org/VAST+Challenge+2014%3A+Mini-Challenge+2#Download_the_Datasets_Entry_Forms_and_Documentation), a subset of the *The Kronos Incident*, where users were asked to analyze movement and tracking data of company owned vehicles. The tracking data provided are two weeks of lat/long information marked with time stamps at 2 second intervals. There are ``r nrow(gpsData)`` rows and ``r ncol(gpsData)`` columns in the *gps.csv* file, where each row is a record instance of four attributes:
+
+1. **Timestamp**- the date in mm/dd/yyyy and time in hh:mm:ss
+2. **id**- a numeric value indicating an ID number for the tracked item (Car ID)
+3. **lat**- the observed latitude of the tracked item
+4. **long**- the observed longitude of the tracked item
+
+There are no missing values in any of the attributes.
+```{r, echo = FALSE, message = FALSE}
+library(dplyr)
+library(lubridate)
+gpsData$Timestamp <- parse_date_time(gpsData$Timestamp, "%m%d%Y %H%M%S")
+byID <- gpsData %>% group_by(id)
+byIDSummary <- byID %>% summarise(nObs = n())
+```
+
+There are ``r length(unique(gpsData$id)) `` unique `ids`, ranging from 1-100, and ``r format(mean(byIDSummary$nObs), digits = 7) `` average,  ``r format(min(byIDSummary$nObs), digits = 7) `` minimum, and ``r format(max(byIDSummary$nObs), digits = 7) `` maximum instances per id. The `Timestamp` is recorded in second intervals, where the time between time stamps can best be summarized as: 
+
+```{r, echo = FALSE}
+library(ggplot2)
+gpsData <- gpsData[order(gpsData$id, gpsData$Timestamp), ]
+diffs = list()
+for (i in 2:length(gpsData$Timestamp)) {
+  if (gpsData$id[i] == gpsData$id[i - 1]) {
+    t2 <- gpsData$Timestamp[i]
+    t1 <- gpsData$Timestamp[i - 1]
+    diffs[[i]] = t2 - t1
+  }
+  if (gpsData$id[i] != gpsData$id[i - 1]) {
+    (diffs[[i]] = NA)
+  }
+}
+diffs[[1]] <- NA
+diffs <- unlist(diffs)
+qplot(diffs, main = "Timestamp Pairwise Differences Relative to ID Number", binwidth = 1, xlab = "Diff in Seconds")
+```
+
+`mean` ``r mean(na.omit(diffs))``, `median` ``r median(na.omit(diffs))``, and `max` ``r max(na.omit(diffs))``, relative to each ID, ranging between ``r min(gpsData$Timestamp)`` and ``r max(gpsData$Timestamp)``. Visually, the time stamp and latitude data for the first two IDs look like:
+
+```{r, echo = FALSE, message = FALSE, fig.width = 9, fig.height = 5}
+firstTwo <- subset(gpsData, id %in% c(1:2))
+p1 <- ggplot(firstTwo, aes(x = Timestamp, y = lat, colour = as.character(id), group = as.character(id)))
+p1 + geom_point(size = 1) + 
+  facet_wrap(~id) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 0)) +
+  scale_colour_brewer(name = "ID", palette = "Set1") +
+  ggtitle('Latitudinal Observations by Timepoint for IDs 1 and 2')
+```
+
+where we notice that the latitude observations interrupt, presumably, when the vehicle stops moving for some length of time. 
+
+### Story
+
+The data story here takes place in a fictitious little city called Abila. Just plotting the lat/long information, colored by id, shows what we would expect traffic patterns to look like in a city.
+
+```{r, echo = FALSE, message = FALSE}
+
+p <- ggplot(byID, aes(y = lat, x = long, colour = id))
+p + geom_point()
+```
+
+The goal of the challenge is to use visual analytics to analyze the data for both a common description of daily employee patterns as well as notes on any unusual events. To help pick out anything suspicious, data for personal and business credit and debit card information as well as employee loyalty card memberships are given. 
+
+## Debit and Credit Card Information
+
+### Summary
+
+```{r, echo = FALSE}
+ccData <- read.csv("/Volumes/AIM_Bramer/VASTChal2014MC2-20140430/cc_data.csv", header = TRUE, stringsAsFactors = FALSE)
+ccData$timestamp <- parse_date_time(ccData$timestamp, "%m%d%Y %H%M")
+```
+For debit and credit card transactions, the file *cc_data.csv* contains transaction information recorded in ``r nrow(ccData)`` rows and ``r ncol(ccData)`` columns, where each row is a transaction with 5 attributes:
+
+1. **timestamp**- mm/dd/yyyy hh:mm 
+2. **location**- name of business whit whom the transaction occurred
+3. **price**- numeric transaction amount
+4. **FirstName**- first name of the cardholder
+5. **LastName**- last name of the card holder
+
+There are no missing values in any of the attributes, which range in date from ``r min(ccData$timestamp)`` to ``r max(ccData$timestamp)``.
+
+## Loyalty Card Information
+
+```{r, echo = FALSE}
+loyaltyData <- read.csv("/Volumes/AIM_Bramer/VASTChal2014MC2-20140430/loyalty_data.csv", header = TRUE, stringsAsFactors = FALSE)
+loyaltyData$timestamp <- parse_date_time(loyaltyData$timestamp, "%m%d%Y")
+```
+
+The loyalty card transactions are found in *loyalty_data.csv* where there are ``r nrow(loyaltyData)`` transactions and ``r ncol(loyaltyData)`` attributes to each transaction:
+
+1. **timestamp**- mm/dd/yyyy 
+2. **location**- name of business with whom the transaction occurred
+3. **price**- numeric transaction amount
+4. **FirstName**- first name of the cardholder
+5. **LastName**- last name of the card holder
+
+There are no missing values in any of the attributes, which range in date from ``r min(loyaltyData$timestamp)`` to ``r max(loyaltyData$timestamp)``.
+
+## Employee Information
+### Summary
+In addition to the tracking and card information, there is the *car-assignments.csv* file that contains a list of vehicle assignments. 
+
+```{r, echo = FALSE}
+assignmentData <- read.csv("/Volumes/AIM_Bramer/VASTChal2014MC2-20140430/car-assignments.csv", header = TRUE, stringsAsFactors = FALSE)
+```
+
+There are ``r nrow(assignmentData)`` assignment records and ``r ncol(assignmentData)`` attributes to each record:
+
+1. **FirstName**- first name of the employee
+2. **LastName**- last name of the employee
+3. **CarID**- identification number of the vehicle
+4. **CurrentEmploymentType**- the department category of the employee
+5. **CurrentEmploymentTitle**- the job title category of the employee
+
+This data has missing records:
+```{r, echo = FALSE}
+apply(assignmentData, 2, function(x) sum(is.na(x)))[3]
+```
+records total are `NA`.
+
+## Other files
+Not summarized in this document are the shape files contained in the *Geospatial* directory, the tourist map of Abila *MC2-Tourist.jpg*, and excess files: *MC2 Answer Sheet.htm**-format on submitting an answer, *MC2 Answer Sheet_files*- the htm dicrectory used to create *MC2 Answer Sheet.htm*.
