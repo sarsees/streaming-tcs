@@ -29,30 +29,31 @@ ParseToFiles <- function(datPath){
     featNames <- gsub("[.]", "", featNames)
     featNames <- gsub(" ", "", featNames)
     test <- gsub("^[\" .]", "    ", parsedTemp) # even spaces between fields
-    write.table(test, file = "/Users/reeh135/Desktop/test", row.names = FALSE) # write a temporary table
-    testTable <- read.fwf("/Users/reeh135/Desktop/test", widths = rep(5, 24),skip = 2, stringsAsFactors = FALSE) # read as a fixed width table
-    unlink("/Users/reeh135/Desktop/test") # delete intermediate
+    write.table(test, file = "~/Desktop/test", row.names = FALSE) # write a temporary table
+    testTable <- read.fwf("~/Desktop/test", widths = rep(5, 24),skip = 2, stringsAsFactors = FALSE) # read as a fixed width table
+    unlink("~/Desktop/test") # delete intermediate
     intermediateResult <- t(testTable[, -1]) # transpose
     colnames(intermediateResult) <- featNames[-1] # remove HEAD
     ID <- grep(pattern = "AL[0-9]{6}", strsplit(temp[i], split = " ")[[1]], value = TRUE) 
     DATE <- grep(pattern = "^[0-9]{6}", strsplit(temp[i], split = " ")[[1]], value = TRUE)
     # Get timestamp from HEAD
     p = gsub("\\s+", " ", str_trim(temp[i]))
-    time = strsplit(p, split = " ")[[1]][2:5]
-    TIMESTAMP <- parse_date_time(paste(time[1], paste(time[2:4], sep = "", collapse = ":"), sep = " "), "%y%m%d %H%M%S")
-    result <- data.frame(ID, DATE, TIMESTAMP, intermediateResult, stringsAsFactors = FALSE)
+    time = strsplit(p, split = " ")[[1]][2:3]
+    #TIMESTAMP <- parse_date_time(paste(time[1], paste(time[2:4], sep = "", collapse = ":"), sep = " "), "%y%m%d %H%M%S")
+    TIMESTAMP <- parse_date_time(paste(time, collapse = ""), "%y%m%d%h")
+    result <- data.frame(ID, DATE, TIMESTAMP, intermediateResult, stringsAsFactors = FALSE) 
     # Attach a record number to the storm filename
     if (!(IDold == ID)) {
       count = 0
-      filename <- paste(paste("/Users/reeh135/Desktop/TC_Data/New/", ID, sep = ""), count, "csv", sep = ".")
+      filename <- paste(paste("~/Desktop/TC_Data/New/", ID, sep = ""), count, "csv", sep = ".")
     }
     if (IDold == ID) {
       count = count + 1
-      filename <- paste(paste("/Users/reeh135/Desktop/TC_Data/New/", ID, sep = ""), count, "csv", sep = ".")
+      filename <- paste(paste("~/Desktop/TC_Data/New/", ID, sep = ""), count, "csv", sep = ".")
     }
-    write.csv(result, file = filename, row.names = FALSE)
+    write.csv(result, file = filename, row.names = FALSE) 
     IDold <- ID
-  }
+  } 
   return(parsedData)
   }
 
@@ -153,7 +154,7 @@ MatchTimePoints <- function(datDir = "~/Desktop/TC_Data/New/", datPattern = ".cs
     if (currentRecord$ID[1] != prevRecord$ID[1]) {
       tcStorms$Match[i] = NA 
     }
-    tcStorms[i, "TIME"] <- groupedPaths$recordNumber[i]
+    tcStorms[i, "RecordNum"] <- groupedPaths$recordNumber[i]
     # Get the HIST Variables for Current Time
     
     tcStorms$HIST20[i] <- currentRecord[which(currentRecord$TIME == 0), "HIST"]
@@ -222,6 +223,6 @@ MatchTimePoints <- function(datDir = "~/Desktop/TC_Data/New/", datPattern = ".cs
 }
 
 #Execute
-TC_Data <- ParseToFiles(datPath = "/Users/reeh135/Desktop/lsdiaga_1982_2014_rean_sat_nbc_ts.dat")
+TC_Data <- ParseToFiles(datPath = "~/Desktop/lsdiaga_1982_2014_rean_sat_nbc_ts.dat")
 tcData <- MatchTimePoints()
-save(tcData, file = "/Users/reeh135/Documents/Projects/TeMpSA/TeMpSA/SHIPS_Developmental/tcIntermediate.RData")
+save(tcData, file = "~/Documents/Projects/TeMpSA/TeMpSA/SHIPS_Developmental/tcIntermediate.RData")

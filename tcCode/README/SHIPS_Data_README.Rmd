@@ -15,13 +15,13 @@ The [Tropical Cyclones Developmental Dataset](http://rammb.cira.colostate.edu/re
 ## Data Description
 Focusing on TCs from the Atlantic Basin only, the raw data arrives in a file called *lsdiaga_1982_2014_rean_sat_nbc_ts.dat* which is described as Atlantic data with SHIPS predictors from either re-analysis or operational analysis with satellite variables when available. The file is one concatenated list of record sets for each storm case. Here, a case includes a current time observation (hour 0) in addition to 120 hours of forecast information (hours 6 to 120) and, in some cases, 12 hours of past information (hours -12 to -6). The case time points occur in 6 hour intervals. Each of the different cases begin with a line descriptor called **HEAD** and end with an end-line called **LAST**. Not all predictors are available for all years. To make the *.dat* file in a readable format, we treated each record as a fixed width format (fwf) table, skipping the header rows, with 24 columns of width 5. Once the fwf table was parsed, the table was transposed to place the attributes as columns and time points as rows. The missing value string `9999` is replaced with `NA`s and the parsed, transposed, and cleaned record is written to a `.csv` file for the sake a creating a bank of easily accessible records. As there are multiple records for one TC, the `.csv` file names are written as `uniquestormID.recordnumber.csv`. 
 
-The next step in preprocessing the data was to concatenate the **hour 0** observations for each case for each storm. Before adding the observation to a master data frame, we crosschecked observations of corresponding time points. If the cases are recorded correctly, for a given storm hours 0 to 114 of the current case should be equivalent with hours 6 to 120 of the previous case for time dependent predictors. To keep track of case discrepancies, we appended a column call **Match** to the master data frame. Below is a detailed description of each of the raw attributes of the master data frame, mostly adapted from the predictor [description file](http://rammb.cira.colostate.edu/research/tropical_cyclones/ships/developmental_data.asp).
+The next step in preprocessing the data was to concatenate the **hour 0** observations for each case for each storm. Before adding the observation to a master data frame, we crosschecked observations of corresponding time points. If the cases are recorded correctly, for a given storm hours 0 to 114 of the current case should be equivalent with hours 6 to 120 of the previous case for time dependent predictors. To keep track of case discrepancies, we appended a column call **Match** to the master data frame. Below is a detailed description of each of the raw attributes of the master data frame, mostly adapted from the predictor [description file](http://rammb.cira.colostate.edu/research/tropical_cyclones/ships/developmental_data.asp). 
 
 Attribute Name        | Description
 --------------------- | ------------------------
 **ID**   | chr. Storm identifier. The first two characters "AL" represent the Atlantic basin, the second two characters represent the sequence number of a TC in a certain year, and the remaining four characters represent the year when the TC happened 
 **DATE** | POSIXct. Date of the storm in the format *yymmdd*
-**TIMESTAMP** | POSIXct. Date of the storm in the format *yymmdd HH:MM:SS* when available
+**TIMESTAMP** | POSIXct. Date of the storm in the format *yymmdd HH* 
 **RECORDNM** | num. The time intervals are currently in fixing. This is the record number from the original .dat file
 **VMAX** | int. Maximum wind surface (kts)
 **MSLP** | int. Minimum sea level pressure (hPa)
@@ -118,6 +118,9 @@ Attribute Name        | Description
 
 ```{r, echo = FALSE, message = FALSE}
 load("~/Documents/Projects/TeMpSA/TeMpSA/SHIPS_Developmental/tcIntermediate.RData")
+# fix date
+library(lubridate)
+tcData$TIMESTAMP <- parse_date_time(tcData$TIMESTAMP, c("ymdhms", "ymd"))
 ```
 Without any further cleaning, the data is ``r nrow(tcData)`` rows of realtime instances and ``r ncol(tcData)`` columns of attributes to each instance. There are ``r length(unique(tcData$ID))`` unique TCs ranging from ``r min(tcData$DATE)`` to ``r max(tcData$DATE)``. The storm paths are again limited to the Atlantic Basin as seen below.
 
@@ -126,9 +129,8 @@ Without any further cleaning, the data is ``r nrow(tcData)`` rows of realtime in
 library(dplyr)
 library(ggplot2)
 library(maps)
-library(lubridate)
 #Label stroms by RI or nonRI
-RI_fun <- function(VMAX_Obs, cut=30, numeric = FALSE){
+RI_fun <- function(VMAX_Obs, TIMESTAMP_Obs, cut=30, numeric = FALSE){
   #A storm at time t is RI if its VMAX will be at least 'cut' (e.g. 30)
   #knots greater at time t+24 hours than at time t
   #This function either returns the diff between the VMAX
@@ -138,16 +140,25 @@ RI_fun <- function(VMAX_Obs, cut=30, numeric = FALSE){
   N <- length(VMAX_Obs)
   res <- rep(0,N) 
   
-  if(N>4){
-    VMAX_Off4 <- VMAX_Obs[-c(1:4)] #replicate of VMAX_Obs but delayed 24 hours
+  if ( N > 4) {
+    off4 <- TIMESTAMP_Obs[-c(1:4)]
+    VMAX_Diff4 <- diff(VMAX_Obs, lag = 4) # differences in VMAX lagged 24
     
-    VMAX_Diff <- VMAX_Off4-VMAX_Obs[-c((N-3):N)] #Index of events that should be classified as RI
-    
-    if(numeric){
-      res[-c((N-3):N)] <- VMAX_Diff
+    if (numeric) {
+      res[-c((N -  3):N)] <- VMAX_Diff4
+      
     }else{
-      res[which(VMAX_Diff>=cut)] <- 1
+      VMAX_Diff4 <- diff(VMAX_Obs, lag = 4)
+      VMAX_Diff3 <- diff(VMAX_Obs, lag = 3)
+      VMAX_Diff2 <- diff(VMAX_Obs, lag = 2)
+      VMAX_Diff1 <- diff(VMAX_Obs, lag = 1)
+      
+      res[which(VMAX_Diff4 >= cut)] <- 1
+      res[which(VMAX_Diff3 >= cut)] <- 1
+      res[which(VMAX_Diff2 >= cut)] <- 1
+      res[which(VMAX_Diff1 >= cut)] <- 1
     }
+    res[which(difftime(off4, TIMESTAMP_Obs[-c((N -  3):N)], units = "hours") != 24)] <- NA # if the storm is out of sequence
   }
   
   return(res)
@@ -155,24 +166,24 @@ RI_fun <- function(VMAX_Obs, cut=30, numeric = FALSE){
 }
 
 #Group all of the data by storm ID
-byStorm <- group_by(tcData, ID) %>% mutate(RI = RI_fun(VMAX), VMAX_Diff = RI_fun(VMAX, numeric = TRUE), DELV = (VMAX - first(VMAX)))
+byStorm <- group_by(tcData, ID) %>% mutate(RI = RI_fun(VMAX, TIMESTAMP), VMAX_Diff = RI_fun(VMAX, TIMESTAMP, numeric = TRUE), DELV = (VMAX - first(VMAX)))
 # Get rid of redundancies in the original "time independent" attributes
 byStorm$HIST <- NULL
 byStorm$IR00 <- NULL
 byStorm$IRM3 <- NULL
 byStorm$LAST <- NULL
-# Fix TIMESTAMP
-byStorm$TIMESTAMP <- parse_date_time(byStorm$TIMESTAMP, "%y%m%d %H%M%S")
+byStorm$TIME <- NULL
+
 ##Plot all of the storms
 tcData$LAT <- tcData$LAT/10
 tcData$LON <- tcData$LON/10
 world <- map_data("world")
-smallworld <- subset(world,long<max(-tcData$LON))
-smallworld <- subset(smallworld,long>min(-tcData$LON))
-smallworld <- subset(smallworld,lat>min(tcData$LAT))
-smallworld <- subset(smallworld,lat<max(tcData$LAT))
+smallworld <- subset(world,long < max(-tcData$LON))
+smallworld <- subset(smallworld, long > min(-tcData$LON))
+smallworld <- subset(smallworld, lat > min(tcData$LAT))
+smallworld <- subset(smallworld, lat < max(tcData$LAT))
 
-qplot(long,lat,data=smallworld)+theme_bw()+geom_path(data=tcData,aes(-LON,LAT,colour=ID,group=ID))+guides(colour=FALSE)+theme_bw()
+qplot(long, lat, data = smallworld) + theme_bw() + geom_path(data = tcData, aes(-LON, LAT, colour = ID, group = ID)) + guides(colour = FALSE) + theme_bw()
 ```
 
 
@@ -180,8 +191,8 @@ qplot(long,lat,data=smallworld)+theme_bw()+geom_path(data=tcData,aes(-LON,LAT,co
 ## Checks and Inconsistencies
 In the cross check for time point inconsistencies, there are a total of ``r length(na.omit(tcData$Match)) - sum(na.omit(tcData$Match))`` inconsistencies. As documented in @jankulak2012prediction, 18 of these inconsistencies belong to the **REFC** attribute. Another 10 of these inconsistencies are due to the **TYPE** attribute. The remaining 10 inconsistencies belong to 9 different storms, where the storm is missing at least one day of data. For example, Hurricane Nadine, the longest storm in this set of records, has a missing cases between 120921 and 120923. We can see the missing data in the lat/long path below
 ```{r, echo = FALSE, message = FALSE}
-NADINE <- subset(byStorm,ID == "AL142012")
-qplot(LAT,LON,data=NADINE,geom='point',colour=VMAX, main = "Track for Storm AL142012 with Missing Data")
+NADINE <- subset(byStorm, ID == "AL142012")
+qplot(LAT, LON, data = NADINE, geom = 'point', colour = VMAX, main = "Track for Storm AL142012 with Missing Data")
 ```
 
 Next, a check to see that the storm history variables beginning with **HIST** are in fact a cumulative history. For the first TC, the **HIST** vars look like:
@@ -190,14 +201,16 @@ library(reshape2)
 library(wesanderson)
 pal <- wes_palette("Cavalcanti", n = 460, type = "continuous")
 histDf <- byStorm[1:17, grep("HIST*", colnames(byStorm))]
-histDf$TIME <- byStorm$TIME[1:17]
+histDf$TIME <- byStorm$TIMESTAMP[1:17]
 histDf$ID <- byStorm$ID[1:17]
 meltedHist <- melt(histDf, id.vars = c("ID", "TIME"))
-ggplot(meltedHist, aes(x = TIME, y = value, color = factor(ID) ))+
-  geom_line(aes(group = variable))+
-  facet_grid(~variable)+
-  scale_color_manual(values = pal)+
-  theme(legend.position = "none")
+ggplot(meltedHist, aes(x = TIME, y = value, color = factor(ID) )) +
+  geom_line(aes(group = variable)) +
+  facet_grid(~variable) +
+  scale_color_manual(values = pal) +
+  theme_bw()+
+  theme(legend.position = "none", axis.text.x = element_text(angle = 50))
+  
 ```  
 
 A little messier, all the storms look like:
@@ -206,19 +219,20 @@ A little messier, all the storms look like:
 
 pal <- wes_palette("Cavalcanti", n = 460, type = "continuous")
 histDf <- byStorm[, grep("HIST*", colnames(byStorm))]
-histDf$TIME <- byStorm$TIME
+histDf$TIME <- byStorm$TIMESTAMP
 histDf$ID <- byStorm$ID
 meltedHist <- melt(histDf, id.vars = c("ID", "TIME"))
-ggplot(meltedHist, aes(x = TIME, y = value, color = factor(ID) ))+
-  geom_line(aes(group = variable))+
-  facet_grid(~variable)+
-  scale_color_manual(values = pal)+
-  theme(legend.position = "none")
+ggplot(meltedHist, aes(x = TIME, y = value, color = factor(ID) )) +
+  geom_line(aes(group = variable)) +
+  facet_grid(~variable) +
+  scale_color_manual(values = pal) +
+  theme_bw()+
+  theme(legend.position = "none", axis.text.x = element_text(angle = 50))
 goodStorms <- byStorm[ -(which(byStorm$ID %in% c("AL102002", "AL122000", "AL132002", "AL142011", "AL142012", "AL162011", "AL022004", "AL042001", "AL072011"))), ]
 areTheyIncreasing <- byStorm[, grep("HIST*", colnames(byStorm))]
 areTheyIncreasing$ID <- byStorm$ID
 areTheyIncreasing$DATE <- byStorm$DATE
-areTheyIncreasing$TIME <- byStorm$TIME
+areTheyIncreasing$TIME <- byStorm$TIMESTAMP
 checks <- areTheyIncreasing %>% group_by(ID) %>% arrange(TIME) %>% mutate(diff20 = (HIST20 - lag(HIST20)), diff25 = (HIST25 - lag(HIST25)), diff30 = (HIST30 - lag(HIST30)), diff35 = (HIST35 - lag(HIST35)), diff40 = (HIST40 - lag(HIST40)), diff45 = (HIST45 - lag(HIST45)), diff50 = (HIST50 - lag(HIST50)), diff55 = (HIST55 - lag(HIST55)), diff60 = (HIST60 - lag(HIST60)), diff65 = (HIST65 - lag(HIST65)), diff70 = (HIST70 - lag(HIST70)), diff75 = (HIST75 - lag(HIST75)), diff80 = (HIST80 - lag(HIST80)), diff85 = (HIST85 - lag(HIST85)), diff90 = (HIST90 - lag(HIST90)), diff95 = (HIST95 - lag(HIST95)), diff100 = (HIST100 - lag(HIST100)), diff105 = (HIST105 - lag(HIST105)), diff110 = (HIST110 - lag(HIST110)), diff115 = (HIST115 - lag(HIST115)), diff120 = (HIST120 - lag(HIST120)))
 
 ``` 
@@ -233,10 +247,10 @@ realProblems <- subset(troubles, Match == TRUE)
 realProblems$ID
 ```
 
-show history inconsistencies, which under further investigation, is a result of date inconsistencies. 
+show history inconsistencies, which under further investigation, is a result of date inconsistencies. As it would happen, this data set only includes cases that qualify as tropical or sub-tropical storms. If the storm weakens, it is no longer classified into either of these two categories and the data is no longer available. If the storm picks up speed, the tracking resumes explaining what happened to NADINE and the history inconsistent storms. A small note, there are also inconsistencies between storms in the case-dependent **TYPE** and **REFC** attributes. Without these variables included in the checks and accounting for missing dates, all inconcsistencies are resolved.
 
 ### VMAX and TIME
-The storm instances have a binary label, 1 indicating RI and 0 indicating nonRI, in addition to a VMAX_Diff column that measures the future 24 hour change in intensity relative to the current time point. The distribution of maximum intensities per time interval for the nonRI and RI storms are shown below
+The storm instances have a binary label, 1 indicating RI and 0 indicating nonRI (for any increase in windspeed greater than 30 kts within 24 hrs), in addition to a VMAX_Diff column that measures the future 24 hour change in intensity relative to the current time point. An `NA` in the **RI** and **VMAXDiff** column signify that the data are not available for the timepoints needed to calculate these attributes (storms like NADINE). The distribution of maximum intensities per time interval for the nonRI and RI storms are shown below. Keep in mind that NAs are likely equivalent to nonRI events as the storm has weakened. 
 
 ### VMAX
 ```{r, echo = FALSE, message = FALSE}
@@ -261,22 +275,22 @@ In terms of class imbalance, there are ``r sum(na.omit(byIndex$RI == 1))`` RI in
 ```{r, echo = FALSE, message = FALSE}
 ggplot(byIndex, aes(x = VMAX_Diff, fill = factor(RI)))+
   geom_histogram()+
-  scale_fill_manual(values = c("#999999", "#E69F00"), name = "Label", breaks = c(0,1), labels = c("nonRI", "RI"))
+  scale_fill_manual(values = c("#999999", "#FF0000"), name = "Label", breaks = c(0,1), labels = c("nonRI", "RI"))
 ```
 
 ### Time Component
 ```{r, echo = FALSE, message = FALSE}
-byStormSummary <- byStorm %>% summarise(nObs = n(), RI_Label = sum(RI))
+byStormSummary <- byStorm %>% summarise(nObs = (last(TIMESTAMP) - first(TIMESTAMP))/dhours(1), RI_Label = sum(na.omit(RI)))
 ```
-The longest storm in the data is ``r byStormSummary[which.max(byStormSummary$nObs), "ID"]`` with a total of ``r max(byStormSummary$nObs)`` instances including the initial ( or ``r (max(byStormSummary$nObs) - 1)*6`` hours). The shortest storm is  ``r byStormSummary[which.min(byStormSummary$nObs), "ID"]`` with a total of ``r min(byStormSummary$nObs)`` instances including the initial ( or ``r (min(byStormSummary$nObs) - 1)*6`` hours). The distribution of storm duration for all storms, colored by the number of RI events in each storm, looks like:
+The longest storm in the data is ``r byStormSummary[which.max(byStormSummary$nObs), "ID"]`` lasting a total of ``r max(byStormSummary$nObs)`` hours. The shortest storm is  ``r byStormSummary[which.min(byStormSummary$nObs), "ID"]`` lasting a total of ``r min(byStormSummary$nObs)`` hours. The distribution of storm duration for all storms, colored by the number of RI events in each storm, looks like:
 
 ```{r, echo = FALSE, message = FALSE}
 
-p <- wes_palette("Royal1", n = 12, type = "continuous")
-ggplot(byStormSummary, aes(x = nObs, fill = factor(RI_Label)))+
-  geom_histogram()+
-  ggtitle("Storm Lengths and RI Instances")+
-  xlab("Number of 6-Hour-Interval Observations")+
+p <- rev(wes_palette("Darjeeling", n = 12, type = "continuous") )
+ggplot(byStormSummary, aes(x = nObs, fill = factor(RI_Label))) +
+  geom_bar() +
+  ggtitle("Storm Lengths and RI Instances") +
+  xlab("Storm Length in Hours") +
   scale_fill_manual(values = p, name = "RI Instances", breaks = c(0,1,2,3,4,5,6,7,8,9,10,11))
 ```
 
@@ -284,16 +298,23 @@ In terms of the time series view, a snapshot look at VMAX vs TIME:
 
 ```{r, echo = FALSE, message = FALSE, fig.height = 6, fig.width= 10}
 nonRIFour <- subset(byStorm, ID %in% c("AL011988", "AL012001", "AL011999", "AL011994"))
-a1 <- ggplot(nonRIFour, aes(x = TIME, y = VMAX, color = ID)) +
+nonRI <- nonRIFour %>% group_by(ID) %>% mutate(TIME = cumsum(hour(TIMESTAMP)))
+#q <- wes_palette("Zissou")
+a1 <- ggplot(nonRI, aes(x = TIME, y = VMAX, color = ID)) +
   geom_line() +
   coord_cartesian(ylim = c(0, 170)) + 
-  ggtitle("NonRI Storms Max Windspeed v Time")
+  ggtitle("NonRI Storms Max Windspeed v Time") +
+  xlab("Hours Relative to Midnight of Storm Start Day") 
+  #scale_color_manual(values = q, name = "ID", breaks = c(0,1,2,3,4))
 
 RIFour <- subset(byStorm, ID %in% c("AL011982", "AL022008", "AL051992", "AL081988"))
-a2 <- ggplot(RIFour, aes(x = TIME, y = VMAX, color = ID)) +
+rRI <- RIFour %>% group_by(ID) %>% mutate(TIME = cumsum(hour(TIMESTAMP)))
+
+a2 <- ggplot(rRI, aes(x = TIME, y = VMAX, color = ID)) +
   geom_line() +
   coord_cartesian(ylim = c(0, 170)) + 
-  ggtitle("RI Storms Max Windspeed v Time")
+  ggtitle("RI Storms Max Windspeed v Time") +
+  xlab("Hours Relative to Midnight of Storm Start Day")
 # Multiple plot function
 #
 # ggplot objects can be passed in ..., or to plotlist (as a list of ggplot objects)
@@ -346,17 +367,19 @@ multiplot(a1, a2, cols=2)
 Similarly, the 24 change in maximum windspeed varies widely for the storms that contain RI events.
 
 ```{r, echo = FALSE, message = FALSE, fig.height = 6, fig.width= 10}
-b1 <- ggplot(nonRIFour, aes(x = TIME, y = VMAX_Diff, color = ID)) +
+b1 <- ggplot(nonRI, aes(x = TIME, y = VMAX_Diff, color = ID)) +
   geom_line() +
   coord_cartesian(ylim = c(-80, 70)) + 
   geom_hline(aes(yintercept = 30))+
-  ggtitle("NonRI Storms 24 Hour Change in  Windspeed")
+  ggtitle("NonRI Storms 24 Hour Change in  Windspeed") +
+  xlab("Hours Relative to Midnight of Storm Start Day")
 
-b2 <- ggplot(RIFour, aes(x = TIME, y = VMAX_Diff, color = ID)) +
+b2 <- ggplot(rRI, aes(x = TIME, y = VMAX_Diff, color = ID)) +
   geom_line() +
   coord_cartesian(ylim = c(-80, 70)) + 
   geom_hline(aes(yintercept = 30))+
-  ggtitle("RI Storms 24 Hour Change in  Windspeed")
+  ggtitle("RI Storms 24 Hour Change in  Windspeed")+
+  xlab("Hours Relative to Midnight of Storm Start Day")
 multiplot(b1, b2, cols = 2)
 ```
 
