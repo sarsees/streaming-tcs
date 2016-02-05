@@ -40,7 +40,7 @@ ParseToFiles <- function(datPath){
     p = gsub("\\s+", " ", str_trim(temp[i]))
     time = strsplit(p, split = " ")[[1]][2:3]
     #TIMESTAMP <- parse_date_time(paste(time[1], paste(time[2:4], sep = "", collapse = ":"), sep = " "), "%y%m%d %H%M%S")
-    TIMESTAMP <- parse_date_time(paste(time, collapse = ""), "%y%m%d%h")
+    TIMESTAMP <- parse_date_time(paste(time, collapse = " "), "ymdh")
     result <- data.frame(ID, DATE, TIMESTAMP, intermediateResult, stringsAsFactors = FALSE) 
     # Attach a record number to the storm filename
     if (!(IDold == ID)) {
