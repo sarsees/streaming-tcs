@@ -33,7 +33,7 @@ ForwardFill <- function(csvPath = "/Volumes/AIM_Bramer/VASTChal2014MC2-20140430/
     # merge the two data frames together
     gpsStream <- merge(gpsIDandTime, filledTimeGPS, all = TRUE)
     #save(gpsStream, file = "~/Documents/Projects/TeMpSA/TeMpSA/gpsStream.RData")
-    gpsStream[is.na(gpsStream$Origins), "Origins"] <- 0
+    gpsStream[is.na(gpsStream$Origins), "Origins"] <- 0 # mark NA origins as 0
     gpsStream <- gpsStream[order(gpsStream$id, gpsStream$Timestamp), ]
     gpsByID <- gpsStream %>% group_by(id)
     
@@ -52,7 +52,7 @@ ForwardFill <- function(csvPath = "/Volumes/AIM_Bramer/VASTChal2014MC2-20140430/
     gpsByIDFilled$Diffs <- NULL
     names(gpsByIDFilled) <- c("Timestamp", "ID", "Lat", "Long", "Origins")
     result <- gpsByIDFilled[!(is.na(gpsByIDFilled$Lat)), ]
-    return(gpsByIDFilled)
+    return(result)
   }
   
   ### Execute
@@ -70,5 +70,7 @@ ForwardFill <- function(csvPath = "/Volumes/AIM_Bramer/VASTChal2014MC2-20140430/
   
   # merge and forward fill missing observations
   gpsStream <- MergeAndClean(byID, filledTimeGPS)
+  save(gpsStream, file = "/Users/reeh135/Documents/Projects/TeMpSA/TeMpSA/gpsStream.RData")
 }
+
 ForwardFill()
