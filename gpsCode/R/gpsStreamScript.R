@@ -70,7 +70,20 @@ ForwardFill <- function(csvPath = "/Volumes/AIM_Bramer/VASTChal2014MC2-20140430/
   
   # merge and forward fill missing observations
   gpsStream <- MergeAndClean(byID, filledTimeGPS)
-  save(gpsStream, file = "/Users/reeh135/Documents/Projects/TeMpSA/TeMpSA/gpsStream.RData")
+  # trim the excess timestamps to the last seen observation
+  result = list()
+  for (i in 1:length(unique(gpsStream$ID))) {
+    id <- (unique(gpsStream$ID))[i]
+    temp <- subset(gpsStream, ID == id)
+    original <- which(temp$Origins == 1)
+    lastOriginal <- original[length(original)]
+    result[[i]] <- temp[c(1:lastOriginal), ]
+  }
+  gpsData <- do.call("rbind", result)
+  save(gpsData, file = "/Users/reeh135/Documents/Projects/TeMpSA/TeMpSA/gpsStream.RData")
 }
 
 ForwardFill()
+
+
+
