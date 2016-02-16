@@ -32,9 +32,9 @@ Attribute Name        | Description
 **LAT**  | int. The latitude in 10\*degrees North of the approximate storm center
 **LON**  | int. The longitude in 10\*degrees West of the approximate storm center
 **CSST** | int. Climatological sea surface temperature (deg C\*10)
-**CD20** | int. Climatoligical depth (m) of 20 degree isotherm from 2005-2010 NCODA analyses
-**CD26** | int. Climatoligical depth (m) of 26 degree isotherm from 2005-2010 NCODA analyses
-**COHC** | int. Climatoligical ocean heat content (kJ/cm^2) 2005-2010 NCODA analyses
+**CD20** | int. Climatological depth (m) of 20 degree isotherm from 2005-2010 NCODA analyses
+**CD26** | int. Climatological depth (m) of 26 degree isotherm from 2005-2010 NCODA analyses
+**COHC** | int. Climatological ocean heat content (kJ/cm^2) 2005-2010 NCODA analyses
 **DTL**  | int. Distance to nearest major land mass (km)
 **RSST** | int. Reynolds sea surface temperature ( deg C\*10)
 **PCHN** | int. Estimated ocean heat content(kJ/cm^2) from **COHC** and current sea surface temperature anomaly. Designed to fill in missing **RHCN**
@@ -247,7 +247,7 @@ realProblems <- subset(troubles, Match == TRUE)
 realProblems$ID
 ```
 
-show history inconsistencies, which under further investigation, is a result of date inconsistencies. As it would happen, this data set only includes cases that qualify as tropical or sub-tropical storms. If the storm weakens, it is no longer classified into either of these two categories and the data is no longer available. If the storm picks up speed, the tracking resumes explaining what happened to NADINE and the history inconsistent storms. A small note, there are also inconsistencies between storms in the case-dependent **TYPE** and **REFC** attributes. Without these variables included in the checks and accounting for missing dates, all inconcsistencies are resolved.
+show history inconsistencies, which under further investigation, is a result of date inconsistencies. As it would happen, this data set only includes cases that qualify as tropical or sub-tropical storms. If the storm weakens, it is no longer classified into either of these two categories and the data is no longer available. If the storm picks up speed, the tracking resumes explaining what happened to NADINE and the history inconsistent storms. A small note, there are also inconsistencies between storms in the case-dependent **TYPE** and **REFC** attributes. Without these variables included in the checks and accounting for missing dates, all inconsistencies are resolved.
 
 ### VMAX and TIME
 The storm instances have a binary label, 1 indicating RI and 0 indicating nonRI (for any increase in windspeed greater than 30 kts within 24 hrs), in addition to a VMAX_Diff column that measures the future 24 hour change in intensity relative to the current time point. An `NA` in the **RI** and **VMAXDiff** column signify that the data are not available for the timepoints needed to calculate these attributes (storms like NADINE). The distribution of maximum intensities per time interval for the nonRI and RI storms are shown below. Keep in mind that NAs are likely equivalent to nonRI events as the storm has weakened. 
@@ -273,8 +273,8 @@ ggplot(byIndex, aes(VMAX)) +
 In terms of class imbalance, there are ``r sum(na.omit(byIndex$RI == 1))`` RI instances compared to ``r sum(na.omit(byIndex$RI == 0))`` nonRI instances. The VMAX Diff shown below ranges from `r min(byIndex$VMAX_Diff)` to `r max(byIndex$VMAX_Diff)`.
 
 ```{r, echo = FALSE, message = FALSE}
-ggplot(byIndex, aes(x = VMAX_Diff, fill = factor(RI)))+
-  geom_histogram()+
+ggplot(byIndex, aes(x = VMAX_Diff, fill = factor(RI))) +
+  geom_histogram() +
   scale_fill_manual(values = c("#999999", "#FF0000"), name = "Label", breaks = c(0,1), labels = c("nonRI", "RI"))
 ```
 
@@ -391,5 +391,78 @@ write.csv(byStorm, file = "~/Documents/Projects/TeMpSA/TeMpSA/SHIPS_Developmenta
 names(byStorm[4]) = "RECORDNUM"
 save(byStorm, file = "~/Documents/Projects/TeMpSA/TeMpSA/SHIPS_Developmental/tcData.RData")
 ```
+
+## Dissipating Stroms
+
+```{r, echo = FALSE, message = FALSE}
+
+timeTest <- byStorm %>% mutate(TimeLag = lag(TIMESTAMP))
+timeTest$Diff <- (timeTest$TIMESTAMP - timeTest$TimeLag)/ dhours(6)
+dissStormIDs <- timeTest$ID[which(timeTest$Diff != 1)]
+dissipatingStorms <- timeTest %>% filter(ID %in% dissStormIDs)
+```
+
+Dealing specifically with storms where we have missing data because of dissipation, there are exactly ``r length(unique(dissStormIDs))`` dissipating storms out of ``r length(unique(byStorm$ID))`` total storms. The dissipating storms are plotted below
+
+```{r, echo = FALSE, message = FALSE, fig.height = 10, fig.width = 9.5}
+library(wesanderson)
+palette = wes_palette("Royal1", n = 19, type = "continuous")
+palette[1] = "#000001"
+ggplot(dissipatingStorms, aes(x = TIMESTAMP, y = VMAX)) +
+  geom_line() +
+  geom_point(aes(color = factor(Diff)), size = 2) +
+  scale_color_manual(values = palette) +
+  facet_wrap(~ID, scale = 'free') + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) 
+  
+```
+
+## Missing Data
+
+```{r, echo = FALSE}
+dissStormIDs <- timeTest$ID[which(timeTest$Diff != 1)]
+tc1983set <-  byStorm %>% filter(!(ID %in% dissStormIDs)) %>% filter(TIMESTAMP <= parse_date_time(1983, "y")) %>% select(-c(RecordNum, RI, VMAX_Diff, Match))
+tcPost83set <- byStorm %>% filter(!(ID %in% dissStormIDs)) %>% filter(TIMESTAMP > parse_date_time(1995, "y")) %>% select(-c(RecordNum, RI, VMAX_Diff, Match))
+```
+
+To summarize the amount of missing data in each of the attributes, we first subset to the timepoints with and with GOES satellite information available. As of March 2009, the satellites were backfilled to 1983, whereas they were only available from 1995 previously. A summary of the `r length(unique(tc1983set$ID))` storms up to 1983:
+
+```{r, echo = FALSE, fig.width=9.5, fig.height = 10}
+library(d3heatmap)
+res <- list()
+tcData <- tc1983set
+for (i in 1:length(unique(tcData$ID))) { 
+  storm <- unique(tcData$ID)[i]
+  temp <- subset(tcData, ID == storm)
+  nMissing <- lapply(temp, function(x) sum(is.na(x)))
+  res[[i]] <- data.frame(nObs = length(temp$ID), totalMissing = sum(is.na(temp)), nMissing = nMissing)
+} 
+summaryData <- do.call(rbind, res)
+rownames(summaryData) <- (unique(tcData$ID)) 
+#summary(summaryData)
+d3heatmap(summaryData[,-c(1:2)], dendrogram = "none", color = "Blues", cexCol = 0.25, cexRow = 0.5)
+```
+
+And a summary of the `r length(unique(tcPost83set$ID))` storms post 1983:
+
+```{r, echo = FALSE, fig.width=9.5, fig.height = 10}
+
+res <- list()
+tcData <- tcPost83set
+for (i in 1:length(unique(tcData$ID))) { 
+  storm <- unique(tcData$ID)[i]
+  temp <- subset(tcData, ID == storm)
+  nMissing <- lapply(temp, function(x) sum(is.na(x)))
+  res[[i]] <- data.frame(nObs = length(temp$ID), totalMissing = sum(is.na(temp)), nMissing = nMissing)
+} 
+summaryData <- do.call(rbind, res)
+rownames(summaryData) <- (unique(tcData$ID)) 
+#summary(summaryData)
+d3heatmap(summaryData[,-c(1:2)], dendrogram = "none", color = "Blues", cexCol = 0.25, cexRow = 0.5)
+```
+
+To drill down specifically, the largest amount of missing data comes from satellites, with ``r length(which(summaryData$nMissing.IRM3_AVG_30BT > 0))`` of the  `r length(unique(tcPost83set$ID))` post `83 storms missing *IR* information.
+
 # References
 
