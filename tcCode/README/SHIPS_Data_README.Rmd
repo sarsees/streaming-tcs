@@ -420,6 +420,8 @@ ggplot(dissipatingStorms, aes(x = TIMESTAMP, y = VMAX)) +
 
 ## Missing Data
 
+### By Storm
+
 ```{r, echo = FALSE}
 dissStormIDs <- timeTest$ID[which(timeTest$Diff != 1)]
 tc1983set <-  byStorm %>% filter(!(ID %in% dissStormIDs)) %>% filter(TIMESTAMP <= parse_date_time(1983, "y")) %>% select(-c(RecordNum, RI, VMAX_Diff, Match))
@@ -462,7 +464,38 @@ rownames(summaryData) <- (unique(tcData$ID))
 d3heatmap(summaryData[,-c(1:2)], dendrogram = "none", color = "Blues", cexCol = 0.25, cexRow = 0.5)
 ```
 
-To drill down specifically, the largest amount of missing data comes from satellites, with ``r length(which(summaryData$nMissing.IRM3_AVG_30BT > 0))`` of the  `r length(unique(tcPost83set$ID))` post `83 storms missing *IR* information.
+To drill down specifically, the largest amount of missing data comes from satellites, with ``r length(which(summaryData$nMissing.IRM3_AVG_30BT > 0))`` of the  `r length(unique(tcPost83set$ID))` post `83 storms missing *IR* information. 
+
+### By Year
+#### Up to 1995 (excluding all satellites)
+```{r, echo = FALSE}
+pre95Feats <- byStorm[,!(grepl( "IR." , names(byStorm)))] # remove IR data
+byYearTo94 <-  pre95Feats %>% 
+  filter(!(ID %in% dissStormIDs)) %>% 
+  select(-c(RI,VMAX_Diff, RecordNum, RD20, RD26, RHCN, Match)) %>% 
+  mutate(YEAR = year(DATE)) %>% 
+  group_by(YEAR) %>% 
+  filter(YEAR < 1995)
+yearDataTo94 <- data.frame(byYearTo94)
+yearDataTo94$Missing <- apply(yearDataTo94, 1, function(x) any(is.na(x)))
+missingSummarybyYearTo94 <- yearDataTo94 %>% group_by(YEAR) %>% summarise(TimePointsWithNAs = sum(Missing), TotalTimePoints = n())
+missingSummarybyYearTo94
+```
+
+#### 1995 to 2014 Inclusive (excluding RD20, RD26 satellite)
+
+```{r, echo = FALSE}
+byYear <-  byStorm %>% 
+  filter(!(ID %in% dissStormIDs)) %>% 
+  select(-c(RI,VMAX_Diff, RecordNum,Match, RD20, RD26)) %>% 
+  mutate(YEAR = year(DATE)) %>% 
+  group_by(YEAR) %>% 
+  filter(YEAR >= 1995)
+yearDataPast94 <- data.frame(byYear)
+yearDataPast94$Missing <- apply(yearDataPast94, 1, function(x) any(is.na(x)))
+missingSummarybyYearPast94 <- yearDataPast94 %>% group_by(YEAR) %>% summarise(TimePointsWithNAs = sum(Missing), TotalTimePoints = n())
+missingSummarybyYearPast94 
+```
 
 # References
 
