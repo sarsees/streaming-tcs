@@ -425,7 +425,7 @@ ggplot(dissipatingStorms, aes(x = TIMESTAMP, y = VMAX)) +
 ```{r, echo = FALSE}
 dissStormIDs <- timeTest$ID[which(timeTest$Diff != 1)]
 tc1983set <-  byStorm %>% filter(!(ID %in% dissStormIDs)) %>% filter(TIMESTAMP <= parse_date_time(1983, "y")) %>% select(-c(RecordNum, RI, VMAX_Diff, Match))
-tcPost83set <- byStorm %>% filter(!(ID %in% dissStormIDs)) %>% filter(TIMESTAMP > parse_date_time(1995, "y")) %>% select(-c(RecordNum, RI, VMAX_Diff, Match))
+tcPost83set <- byStorm %>% filter(!(ID %in% dissStormIDs)) %>% filter(TIMESTAMP > parse_date_time(1983, "y")) %>% select(-c(RecordNum, RI, VMAX_Diff, Match))
 ```
 
 To summarize the amount of missing data in each of the attributes, we first subset to the timepoints with and with GOES satellite information available. As of March 2009, the satellites were backfilled to 1983, whereas they were only available from 1995 previously. A summary of the `r length(unique(tc1983set$ID))` storms up to 1983:
@@ -485,9 +485,10 @@ missingSummarybyYearTo94
 #### 1995 to 2014 Inclusive (excluding RD20, RD26 satellite)
 
 ```{r, echo = FALSE}
-byYear <-  byStorm %>% 
+post95Feats <- byStorm[,!(grepl( "IRM3." , names(byStorm)))] 
+byYear <-  post95Feats %>% 
   filter(!(ID %in% dissStormIDs)) %>% 
-  select(-c(RI,VMAX_Diff, RecordNum,Match, RD20, RD26)) %>% 
+  select(-c(RI,VMAX_Diff, RecordNum, Match, RD20, RD26, RHCN, INCV)) %>% 
   mutate(YEAR = year(DATE)) %>% 
   group_by(YEAR) %>% 
   filter(YEAR >= 1995)

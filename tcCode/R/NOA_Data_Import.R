@@ -132,6 +132,25 @@ MatchTimePoints <- function(datDir = "~/Desktop/TC_Data/New/", datPattern = ".cs
   tcStorms$IRM3_MIN_20BT <- firstRecord[which(firstRecord$TIME == 84), "IRM3"]
   tcStorms$IRM3_AVG_20BT <- firstRecord[which(firstRecord$TIME == 90), "IRM3"]
   tcStorms$IRM3_RADIUS_MINBT <- firstRecord[which(firstRecord$TIME == 96), "IRM3"]
+  # Get PSLV Variables For Current Time
+  tcStorms$PSLV <- firstRecord[which(firstRecord$TIME == 0), "PSLV"]
+  tcStorms$SPDX <- firstRecord[which(firstRecord$TIME == 6), "PSLV"]
+  tcStorms$VSM <- firstRecord[which(firstRecord$TIME == 12), "PSLV"]
+  tcStorms$SPDX_MASS_WTD <- firstRecord[which(firstRecord$TIME == 18), "PSLV"]
+  tcStorms$VSM_MASS_WTD <- firstRecord[which(firstRecord$TIME == 24), "PSLV"]
+  tcStorms$SPDX_OPT_WTD <- firstRecord[which(firstRecord$TIME == 30), "PSLV"]
+  tcStorms$VSM_OPT_WTD <- firstRecord[which(firstRecord$TIME == 36), "PSLV"]
+  tcStorms$ALPHA <- firstRecord[which(firstRecord$TIME == 42), "PSLV"]
+  tcStorms$OPT_100 <- firstRecord[which(firstRecord$TIME == 48), "PSLV"]
+  tcStorms$OPT_150 <- firstRecord[which(firstRecord$TIME == 54), "PSLV"]
+  tcStorms$OPT_200 <- firstRecord[which(firstRecord$TIME == 60), "PSLV"]
+  tcStorms$OPT_250 <- firstRecord[which(firstRecord$TIME == 66), "PSLV"]
+  tcStorms$OPT_300 <- firstRecord[which(firstRecord$TIME == 72), "PSLV"]
+  tcStorms$OPT_400 <- firstRecord[which(firstRecord$TIME == 78), "PSLV"]
+  tcStorms$OPT_500 <- firstRecord[which(firstRecord$TIME == 84), "PSLV"]
+  tcStorms$OPT_700 <- firstRecord[which(firstRecord$TIME == 90), "PSLV"]
+  tcStorms$OPT_850 <- firstRecord[which(firstRecord$TIME == 96), "PSLV"]
+  tcStorms$OPT_1000 <- firstRecord[which(firstRecord$TIME == 102), "PSLV"]
   for (i in 2:length(groupedPaths$paths)) {
     prevRecord <- read.csv(paste(datDir, groupedPaths$paths[i - 1], sep = ""), stringsAsFactors = FALSE, na.strings = c("NA","9999")) # r0 record
     prevRecord[ prevRecord == "NA"] <- NA
@@ -214,6 +233,25 @@ MatchTimePoints <- function(datDir = "~/Desktop/TC_Data/New/", datPattern = ".cs
     tcStorms[i, "IRM3_MIN_20BT"] <- currentRecord[which(currentRecord$TIME == 84), "IRM3"]
     tcStorms[i, "IRM3_AVG_20BT"] <- currentRecord[which(currentRecord$TIME == 90), "IRM3"]
     tcStorms[i, "IRM3_RADIUS_MINBT"] <- currentRecord[which(currentRecord$TIME == 96), "IRM3"]
+    # Get PSLV Variables For Current Time
+    tcStorms$PSLV[i] <- currentRecord[which(currentRecord$TIME == 0), "PSLV"]
+    tcStorms$SPDX[i] <- currentRecord[which(currentRecord$TIME == 6), "PSLV"]
+    tcStorms$VSM[i] <- currentRecord[which(currentRecord$TIME == 12), "PSLV"]
+    tcStorms$SPDX_MASS_WTD[i] <- currentRecord[which(currentRecord$TIME == 18), "PSLV"]
+    tcStorms$VSM_MASS_WTD[i] <- currentRecord[which(currentRecord$TIME == 24), "PSLV"]
+    tcStorms$SPDX_OPT_WTD[i] <- currentRecord[which(currentRecord$TIME == 30), "PSLV"]
+    tcStorms$VSM_OPT_WTD[i] <- currentRecord[which(currentRecord$TIME == 36), "PSLV"]
+    tcStorms$ALPHA[i] <- currentRecord[which(currentRecord$TIME == 42), "PSLV"]
+    tcStorms$OPT_100[i] <- currentRecord[which(currentRecord$TIME == 48), "PSLV"]
+    tcStorms$OPT_150[i] <- currentRecord[which(currentRecord$TIME == 54), "PSLV"]
+    tcStorms$OPT_200[i] <- currentRecord[which(currentRecord$TIME == 60), "PSLV"]
+    tcStorms$OPT_250[i] <- currentRecord[which(currentRecord$TIME == 66), "PSLV"]
+    tcStorms$OPT_300[i] <- currentRecord[which(currentRecord$TIME == 72), "PSLV"]
+    tcStorms$OPT_400[i] <- currentRecord[which(currentRecord$TIME == 78), "PSLV"]
+    tcStorms$OPT_500[i] <- currentRecord[which(currentRecord$TIME == 84), "PSLV"]
+    tcStorms$OPT_700[i] <- currentRecord[which(currentRecord$TIME == 90), "PSLV"]
+    tcStorms$OPT_850[i] <- currentRecord[which(currentRecord$TIME == 96), "PSLV"]
+    tcStorms$OPT_1000[i] <- currentRecord[which(currentRecord$TIME == 102), "PSLV"]
   }
   tcStorms$TYPE <- factor(tcStorms$TYPE)
   paddedDate <- sprintf("%06d", tcStorms$DATE)
